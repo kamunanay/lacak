@@ -1,13 +1,15 @@
 {
-  "name": "mediafire-phishing-edu",
+  "name": "mediafire-phishing-simulator",
   "version": "1.0.0",
-  "description": "Phishing simulator for educational purposes",
+  "description": "Educational phishing simulator for MediaFire",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
+    "body-parser": "^1.20.2",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "node-telegram-bot-api": "^0.61.0"
   }
 }
