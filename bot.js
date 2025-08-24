@@ -98,7 +98,6 @@ app.listen(PORT, () => {
     `PERINGATAN: Ini hanya untuk tujuan edukasi. Jangan disalahgunakan!`,
     {parse_mode: 'Markdown'}
   );
-});
 
 app.post('/send-data', async (req, res) => {
   try {
